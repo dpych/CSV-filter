@@ -7,12 +7,21 @@ import csv
 import sqlite3
 import os
 import platform
+import sys
 
+#sys.path.append('./')
 conn = sqlite3.connect('db.sqlite')
+csv.field_size_limit(sys.maxsize)
+import data
+
+output_dir = "./generate/"
+unzip_dir = "./unzip/"
 sklep = ""
 plec = ""
 baza = ""
+keys = ['Address','imie','plec','Status','sklep','kod_pocztowy','baza']
 
+data.extract_all()
 
 def clrScr():
     if platform.system() == 'Windows' :
@@ -38,41 +47,61 @@ def create_table_contacts():
 def insert_into_contact(purchases):
     cur = conn.cursor()
     cur.executemany('insert into contacts (email,name,gender,status,sklep,zipcode,baza) VALUES (?,?,?,?,?,?,?)', purchases)
+    #poni¿ej zapytanie powoduje proporcjonalnie do wprowadzonych wierszy czas importu
+    #cur.executemany('insert or replace into contacts (id,email,name,gender,status,sklep,zipcode,baza) VALUES ((select id from contacts where email=? and baza=?),?,?,?,?,?,?,?)', purchases)
     conn.commit()
 
-def get_stuff():
-    filename = 'test.csv'
+def get_stuff(filename):
+    #filename = 'test.csv'
+    print "import pliku: " + filename;
     with open(filename, "rb") as csvfile:
         datareader = csv.reader(csvfile, delimiter=';', quotechar='|')
         count =0
         active =0
+        tmp=0;
         purchases = []
+        ids = {'Address':None,'imie':None,'plec':None,'Status':None,'sklep':None,'kod_pocztowy':None}
+
+        for col in datareader.next() :
+            for k in keys:
+                if k==col :
+                    ids.update({k:tmp})
+            tmp+=1
+
         for row in datareader:
             count+=1
+            sys.stdout.write("\r%d%%" % count)
+            sys.stdout.flush()
+            i = [None, None, None, None, None, None, filename]
             if len(row) >= 3 and row[2] == 'active' :
                 active +=1
-                i = [
-                    row[0].decode('utf-8'), 
-                    row[3].decode('utf-8'), 
-                    row[5].decode('utf-8'), 
-                    row[2].decode('utf-8'), 
-                    row[7].decode('utf-8'),
-                    row[4].decode('utf-8'),
-                    'sklep.sizeer.com']
+                
+                if ids['Address'] :
+                    i[0] = row[ids['Address']].decode('utf-8')
+                if ids['imie'] :
+                    i[1] = row[ids['imie']].decode('utf-8')
+                if ids['plec'] :
+                    i[2] = row[ids['plec']].decode('utf-8')
+                if ids['Status'] :
+                    i[3]= row[ids['Status']].decode('utf-8')
+                if ids['sklep'] :
+                    i[4] = row[ids['sklep']].decode('utf-8')
+                if ids['kod_pocztowy'] :
+                    i[5] = row[ids['kod_pocztowy']].decode('utf-8')
+                
                 purchases.append(i)
                 if len(purchases) >= 1000 :
                     insert_into_contact(purchases);
                     purchases = []
-                #print row[0]
         insert_into_contact(purchases);
-    print active
+    print "\n" + str(active)
     return count
 
 def get_export():
-    global sklep, plec, baza
+    global sklep, plec, baza, output_dir
     
     limit = 10000
-    dir = './generate/'
+    dir = output_dir
     file = sklep + "_" + plec + "_" + baza + ".csv"
 
     if not os.path.exists(dir) :
@@ -97,6 +126,13 @@ def get_export():
             ))
 #            print row 
 
+def get_data():
+    lista = data.get_list_files('csv',unzip_dir);
+    clrScr()
+    print lista
+    for filename in lista:
+        get_stuff(unzip_dir + filename);
+
 def get_rows():
     cur = conn.cursor()
     cur.execute('select count(*) from contacts')
@@ -106,7 +142,7 @@ def get_rows():
 def print_menu():
     menu = {
         0: exit,
-        1: get_stuff,
+        1: get_data,
         2: setup_export
     }
     clrScr()
